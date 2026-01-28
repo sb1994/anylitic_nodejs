@@ -29,22 +29,119 @@ const getAllJobPostings = async (req, res) => {
 const getJobPostingById = async (req, res) => {
   try {
     const { id } = req.params;
+    const userid = req.user ? req.user.id : null;
+
     // Logic to get a job posting by ID from the database
-    res
-      .status(200)
-      .json({ success: true, data: { mess: `Got post with id: ${id}` } }); // Placeholder response
+
+    //////////NEED TO DO LOGIC FOR LOGGED IN EMPLOYEE//////////
+    //this will contain the role of the user making the request HR or Admin
+
+    let query = ``;
+
+    if (userid) {
+      console.log("User ID:", userid);
+      query = `SELECT * FROM job_postings WHERE id=$1`;
+    } else {
+      console.log("No user ID available");
+
+      query = `SELECT id, title, description, location, department_id, employment_type, 
+          salary_min, salary_max, posted_at, closes_at, status FROM job_postings WHERE id=$1`;
+    }
+
+    const { rows } = await pool.query(query, [id]);
+
+    if (!rows.length) {
+      return res.status(404).json({ message: "Job posting not found" });
+    }
+
+    return res.status(200).json({ success: true, data: rows[0] }); // Placeholder response
   } catch (error) {
-    logger.error({
-      data: {
-        status: 500,
-        traceToken: req.traceToken,
-        apiAction: "GET_JOB_POSTING_BY_ID",
-        apiEndpoint: req.originalUrl,
-        method: req.method,
-        mess: error.message,
-      },
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+const closeJobPosting = async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Logic to approve a job posting by ID in the database
+
+    //userid for audit trail can be obtained from req.user if using authentication middleware but for now will be 1 as the system user as there is no auth implemented yet
+
+    ////TO DO ADD THE UPDATE_BY VALUES TO THE TABLE/////
+
+    // better to do update and set approved=true rather than select then update for concurrency
+    const query = `UPDATE job_postings
+      SET 
+        status = 'closed',
+        updated_at = NOW()
+      WHERE id = $1 AND status = 'open'
+      RETURNING *;`;
+
+    const close_values = [id];
+
+    const { rows } = await pool.query(query, close_values);
+
+    if (rows.length) {
+      return res.status(200).json({ success: true, data: rows[0] }); // Placeholder response
+    }
+
+    // If no rows were updated, check if the job posting exists and its status is open
+    const check = await pool.query("SELECT * FROM job_postings WHERE id=$1", [
+      id,
+    ]);
+
+    if (!check.rows.length) {
+      return res.status(404).json({ message: "Job posting not found" });
+    }
+
+    return res.status(400).json({
+      message: `Job posting already ${check.rows[0].status}`,
     });
-    res.status(500).json({ success: false, message: "Server Error" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// hr archive job posting for closing and future use if needed
+const archiveJobPosting = async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Logic to approve a job posting by ID in the database
+
+    //userid for audit trail can be obtained from req.user if using authentication middleware but for now will be 1 as the system user as there is no auth implemented yet
+
+    ////TO DO ADD THE UPDATE_BY VALUES TO THE TABLE/////
+
+    // better to do update and set approved=true rather than select then update for concurrency
+    const query = `UPDATE job_postings
+      SET 
+        status = 'archived',
+        updated_at = NOW()
+      WHERE id = $1 AND status = 'open'
+      RETURNING *;`;
+
+    const close_values = [id];
+
+    const { rows } = await pool.query(query, close_values);
+
+    if (rows.length) {
+      return res.status(200).json({ success: true, data: rows[0] });
+    }
+
+    // If no rows were updated, check if the job posting exists and its status is open
+    const check = await pool.query(
+      "SELECT status FROM job_postings WHERE id=$1",
+      [id],
+    );
+
+    if (!check.rows.length) {
+      return res.status(404).json({ message: "Job posting not found" });
+    }
+
+    return res.status(400).json({
+      message: `Job posting already ${check.rows[0].status}`,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -178,4 +275,6 @@ module.exports = {
   getJobPostingById,
   createJobPosting,
   approveJobPosting,
+  closeJobPosting,
+  archiveJobPosting,
 };
