@@ -5,8 +5,9 @@ const fs = require("fs");
 const path = require("path"); // Import the path module
 
 // const { PERMISSIONS } = require("../config/permissions");
-const { isEmpty } = require("../utils/utils");
+const { isEmpty, getEntraAccessToken } = require("../utils/utils");
 const logger = require("../utils/logger");
+const { default: axios } = require("axios");
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -67,7 +68,7 @@ const loginUser = async (req, res) => {
       process.env.SECRET,
       {
         expiresIn: "30d",
-      }
+      },
     );
 
     logger.info({
@@ -152,27 +153,9 @@ const createAdminUser = async (req, res) => {
   }
 };
 const getUserById = async (req, res) => {
-  let { id } = req.params;
-  let { user } = req;
-
-  if (isEmpty(id)) {
-    logger.error({
-      data: {
-        status: 500,
-        apiUserID: user.id,
-        traceToken: req.traceToken,
-        apiAction: "GET_USER_BY_ID",
-        apiEndpoint: req.originalUrl,
-        method: req.method,
-        mess: "USER_ID UNDEFINED OR NOT VALID INPUT",
-      },
-    });
-    return res.status(400).json({
-      message: "User Id not defined",
-    });
-  }
   try {
     const selectedUser = await User.findById(id);
+    console.log(req.traceToken);
 
     if (!selectedUser) {
       logger.info({
@@ -270,7 +253,32 @@ const createEmployee = async (req, res) => {
 const getAllUsers = async (req, res) => {
   try {
     // const users = await User.find().populate("jobRole");
-    res.json({ success: true, data: "this is a test" });
+
+    let entraAccessToken = await getEntraAccessToken();
+
+    const email = "sean_boyle@boylerinmail.eu";
+    console.log(email);
+
+    const url = `https://graph.microsoft.com/v1.0/users`;
+
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${entraAccessToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    console.log(response.data);
+
+    for (let user of response.data.value) {
+      console.log(user.userPrincipalName);
+    }
+
+    console.log("got here");
+
+    let users = response.data.value;
+
+    res.json({ success: true, data: users });
   } catch (error) {
     res
       .status(500)

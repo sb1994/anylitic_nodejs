@@ -17,15 +17,16 @@ const getEntraAccessToken = async () => {
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
         },
-        timeout: 10000, // 10 seconds
+        timeout: 100000, // 10 seconds
       }
     );
 
     console.log(response.data); // JWT token
 
-    let { data } = response;
+    let { access_token } = response.data;
+    console.log("Access Token:", access_token);
 
-    return data;
+    return access_token;
   } catch (err) {
     console.error("Error getting access token", err.response?.data || err);
     throw err;
